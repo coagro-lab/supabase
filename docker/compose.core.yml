@@ -16,8 +16,9 @@ services:
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
     entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
     networks:
-      - dokploy-network
-      - lab-supabase-core
+       dokploy-network: {}
+       lab-supabase-core:
+          aliases: [kong]
     deploy:
       labels:
         - traefik.enable=true
@@ -60,7 +61,8 @@ services:
       GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
       GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
     networks:
-      - lab-supabase-core
+      lab-supabase-core:
+          aliases: [auth]
 
   rest:
     image: postgrest/postgrest:v14.1
@@ -74,7 +76,8 @@ services:
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
     command: ["postgrest"]
     networks:
-      - lab-supabase-core
+       lab-supabase-core:
+          aliases: [rest]
 
   realtime:
     image: supabase/realtime:v2.68.0
@@ -96,7 +99,8 @@ services:
       SEED_SELF_HOST: "true"
       RUN_JANITOR: "true"
     networks:
-      - lab-supabase-core
+       lab-supabase-core:
+          aliases: [realtime]
 
   meta:
     image: supabase/postgres-meta:v0.95.1
@@ -109,7 +113,8 @@ services:
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
       CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
     networks:
-      - lab-supabase-core
+       lab-supabase-core:
+          aliases: [meta]
 
   functions:
     image: supabase/edge-runtime:v1.69.28
@@ -124,7 +129,8 @@ services:
       VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
     command: ["start","--main-service","/home/deno/functions/main"]
     networks:
-      - lab-supabase-core
+      lab-supabase-core:
+          aliases: [functions]
 
   analytics:
     image: supabase/logflare:1.27.0
@@ -144,7 +150,8 @@ services:
       POSTGRES_BACKEND_SCHEMA: _analytics
       LOGFLARE_FEATURE_FLAG_OVERRIDE: "multibackend=true"
     networks:
-      - lab-supabase-core
+      lab-supabase-core:
+          aliases: [analytics]
 
   vector:
     image: timberio/vector:0.28.1-alpine
@@ -155,7 +162,8 @@ services:
       LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
     command: ["--config","/etc/vector/vector.yml"]
     networks:
-      - lab-supabase-core
+      lab-supabase-core:
+          aliases: [vector]
     deploy:
       placement:
         constraints:
@@ -185,7 +193,8 @@ services:
       JWT_EXP: ${JWT_EXPIRY}
     command: ["postgres","-c","config_file=/etc/postgresql/postgresql.conf","-c","log_min_messages=fatal"]
     networks:
-      - lab-supabase-core
+      lab-supabase-core:
+          aliases: [db]
 
   supavisor:
     image: supabase/supavisor:2.7.4
@@ -211,7 +220,8 @@ services:
       DB_POOL_SIZE: ${POOLER_DB_POOL_SIZE}
     command: ["/bin/sh","-c","/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"]
     networks:
-      - lab-supabase-core
+      lab-supabase-core:
+          aliases: [supavisor]
 
 volumes:
   db-config:
