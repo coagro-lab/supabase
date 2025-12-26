@@ -1,0 +1,48 @@
+services:
+  studio:
+    image: supabase/studio:2025.12.17-sha-43f4f7f
+    environment:
+      HOSTNAME: "::"
+
+      STUDIO_PG_META_URL: http://${CORE_STACK:-supabase-core}_meta:8080
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: ${CORE_STACK:-supabase-core}_db
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      SUPABASE_URL: http://${CORE_STACK:-supabase-core}_kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+
+      LOGFLARE_URL: http://${CORE_STACK:-supabase-core}_analytics:4000
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
+      LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}
+      NEXT_PUBLIC_ENABLE_LOGS: "true"
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+
+    networks:
+      - dokploy-network
+      - lab-supabase-core
+
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=dokploy-network
+        # >>> AJUSTE O DOMÍNIO DO STUDIO <<<
+        - traefik.http.routers.supabase-studio.rule=Host(`${STUDIO_DOMAIN}`)
+        - traefik.http.routers.supabase-studio.entrypoints=websecure
+        - traefik.http.routers.supabase-studio.tls=true
+        - traefik.http.services.supabase-studio.loadbalancer.server.port=3000
+
+networks:
+  dokploy-network:
+    external: true
+  lab-supabase-core:
+    external: true

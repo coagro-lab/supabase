@@ -1,0 +1,223 @@
+services:
+  kong:
+    image: kong:2.8.1
+    volumes:
+      - ./volumes/api/kong.yml:/home/kong/temp.yml:ro
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
+    networks:
+      - dokploy-network
+      - lab-supabase-core
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=dokploy-network
+        # >>> AJUSTE O DOMÍNIO <<<
+        - traefik.http.routers.supabase-kong.rule=Host(`${SUPABASE_DOMAIN}`)
+        - traefik.http.routers.supabase-kong.entrypoints=websecure
+        - traefik.http.routers.supabase-kong.tls=true
+        - traefik.http.services.supabase-kong.loadbalancer.server.port=8000
+
+  auth:
+    image: supabase/gotrue:v2.184.0
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-core_db:5432/${POSTGRES_DB}
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP}
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      GOTRUE_SMTP_USER: ${SMTP_USER}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
+      GOTRUE_MAILER_URLPATHS_INVITE: ${MAILER_URLPATHS_INVITE}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${MAILER_URLPATHS_CONFIRMATION}
+      GOTRUE_MAILER_URLPATHS_RECOVERY: ${MAILER_URLPATHS_RECOVERY}
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${MAILER_URLPATHS_EMAIL_CHANGE}
+      GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
+      GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
+    networks:
+      - lab-supabase-core
+
+  rest:
+    image: postgrest/postgrest:v14.1
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@supabase-core_db:5432/${POSTGRES_DB}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
+    command: ["postgrest"]
+    networks:
+      - lab-supabase-core
+
+  realtime:
+    image: supabase/realtime:v2.68.0
+    environment:
+      PORT: 4000
+      DB_HOST: supabase-core_db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+    networks:
+      - lab-supabase-core
+
+  meta:
+    image: supabase/postgres-meta:v0.95.1
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: supabase-core_db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: ${POSTGRES_DB}
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+    networks:
+      - lab-supabase-core
+
+  functions:
+    image: supabase/edge-runtime:v1.69.28
+    volumes:
+      - ./volumes/functions:/home/deno/functions:Z
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@supabase-core_db:5432/${POSTGRES_DB}
+      VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
+    command: ["start","--main-service","/home/deno/functions/main"]
+    networks:
+      - lab-supabase-core
+
+  analytics:
+    image: supabase/logflare:1.27.0
+    environment:
+      LOGFLARE_NODE_HOST: 127.0.0.1
+      DB_USERNAME: supabase_admin
+      DB_DATABASE: _supabase
+      DB_HOSTNAME: supabase-core_db
+      DB_PORT: 5432
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SCHEMA: _analytics
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
+      LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}
+      LOGFLARE_SINGLE_TENANT: true
+      LOGFLARE_SUPABASE_MODE: true
+      POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@supabase-core_db:5432/_supabase
+      POSTGRES_BACKEND_SCHEMA: _analytics
+      LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
+    networks:
+      - lab-supabase-core
+
+  vector:
+    image: timberio/vector:0.28.1-alpine
+    volumes:
+      - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
+    command: ["--config","/etc/vector/vector.yml"]
+    networks:
+      - lab-supabase-core
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  db:
+    image: supabase/postgres:15.8.1.085
+    volumes:
+      - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
+      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+      - ./volumes/db/data:/var/lib/postgresql/data:Z
+      - ./volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
+      - ./volumes/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+      - ./volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
+      - db-config:/etc/postgresql-custom
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY}
+    command: ["postgres","-c","config_file=/etc/postgresql/postgresql.conf","-c","log_min_messages=fatal"]
+    networks:
+      - lab-supabase-core
+
+  supavisor:
+    image: supabase/supavisor:2.7.4
+    volumes:
+      - ./volumes/pooler/pooler.exs:/etc/pooler/pooler.exs:ro
+    environment:
+      PORT: 4000
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@supabase-core_db:5432/_supabase
+      CLUSTER_POSTGRES: true
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      VAULT_ENC_KEY: ${VAULT_ENC_KEY}
+      API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      REGION: local
+      ERL_AFLAGS: -proto_dist inet_tcp
+      POOLER_TENANT_ID: ${POOLER_TENANT_ID}
+      POOLER_DEFAULT_POOL_SIZE: ${POOLER_DEFAULT_POOL_SIZE}
+      POOLER_MAX_CLIENT_CONN: ${POOLER_MAX_CLIENT_CONN}
+      POOLER_POOL_MODE: transaction
+      DB_POOL_SIZE: ${POOLER_DB_POOL_SIZE}
+    command: ["/bin/sh","-c","/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"]
+    networks:
+      - lab-supabase-core
+
+volumes:
+  db-config:
+
+networks:
+  dokploy-network:
+    external: true
+  lab-supabase-core:
+    external: true
