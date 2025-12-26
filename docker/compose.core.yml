@@ -35,7 +35,7 @@ services:
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${API_EXTERNAL_URL}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-core_db:5432/${POSTGRES_DB}
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@nwedb-core_db:5432/${POSTGRES_DB}
       GOTRUE_SITE_URL: ${SITE_URL}
       GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
       GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP}
@@ -65,7 +65,7 @@ services:
   rest:
     image: postgrest/postgrest:v14.1
     environment:
-      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@supabase-core_db:5432/${POSTGRES_DB}
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@nwedb-core_db:5432/${POSTGRES_DB}
       PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
       PGRST_DB_ANON_ROLE: anon
       PGRST_JWT_SECRET: ${JWT_SECRET}
@@ -80,7 +80,7 @@ services:
     image: supabase/realtime:v2.68.0
     environment:
       PORT: 4000
-      DB_HOST: supabase-core_db
+      DB_HOST: nwedb-core_db
       DB_PORT: 5432
       DB_USER: supabase_admin
       DB_PASSWORD: ${POSTGRES_PASSWORD}
@@ -102,7 +102,7 @@ services:
     image: supabase/postgres-meta:v0.95.1
     environment:
       PG_META_PORT: 8080
-      PG_META_DB_HOST: supabase-core_db
+      PG_META_DB_HOST: nwedb-core_db
       PG_META_DB_PORT: 5432
       PG_META_DB_NAME: ${POSTGRES_DB}
       PG_META_DB_USER: supabase_admin
@@ -120,7 +120,7 @@ services:
       SUPABASE_URL: http://kong:8000
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@supabase-core_db:5432/${POSTGRES_DB}
+      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@nwedb-core_db:5432/${POSTGRES_DB}
       VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
     command: ["start","--main-service","/home/deno/functions/main"]
     networks:
@@ -132,7 +132,7 @@ services:
       LOGFLARE_NODE_HOST: 127.0.0.1
       DB_USERNAME: supabase_admin
       DB_DATABASE: _supabase
-      DB_HOSTNAME: supabase-core_db
+      DB_HOSTNAME: nwedb-core_db
       DB_PORT: 5432
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SCHEMA: _analytics
@@ -140,7 +140,7 @@ services:
       LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}
       LOGFLARE_SINGLE_TENANT: "true"
       LOGFLARE_SUPABASE_MODE: "true"
-      POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@supabase-core_db:5432/_supabase
+      POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@nwedb-core_db:5432/_supabase
       POSTGRES_BACKEND_SCHEMA: _analytics
       LOGFLARE_FEATURE_FLAG_OVERRIDE: "multibackend=true"
     networks:
@@ -196,7 +196,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@supabase-core_db:5432/_supabase
+      DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@nwedb-core_db:5432/_supabase
       CLUSTER_POSTGRES: "true"
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       VAULT_ENC_KEY: ${VAULT_ENC_KEY}
